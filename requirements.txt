@@ -1,0 +1,48 @@
+# FastAPI and server
+fastapi>=0.100.0
+uvicorn[standard]>=0.22.0
+python-multipart>=0.0.6
+pydantic>=2.0.0
+
+# Document processing
+PyMuPDF>=1.23.0
+pdf2image>=1.16.3
+python-docx>=0.8.11
+openpyxl>=3.1.2
+
+# OCR
+paddleocr>=2.7.0
+paddlepaddle>=2.5.0  # CPU version, use paddlepaddle-gpu for GPU
+pytesseract>=0.3.10
+Pillow>=10.0.0
+
+# Audio/Video processing
+openai-whisper>=20231117
+ffmpeg-python>=0.2.0
+
+# Computer Vision
+opencv-python>=4.8.0
+opencv-python-headless>=4.8.0
+
+# Image captioning and embeddings
+transformers>=4.35.0
+torch>=2.0.0
+open-clip-torch>=2.23.0
+
+# Embeddings
+sentence-transformers>=2.2.2
+
+# Vector store
+faiss-cpu>=1.7.4  # Use faiss-gpu for GPU support
+
+# Database
+psycopg2-binary>=2.9.9
+
+# Utilities
+numpy>=1.24.0
+requests>=2.31.0
+tqdm>=4.66.0
+
+# LLM (optional - for transformers-based LLM)
+# accelerate>=0.24.0
+# bitsandbytes>=0.41.0
