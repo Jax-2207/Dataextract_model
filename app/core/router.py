@@ -3,11 +3,17 @@ def detect_file_type(filename: str):
     
     if ext in ["pdf"]:
         return "pdf"
-    elif ext in ["mp3", "wav"]:
+    elif ext in ["mp3", "wav", "m4a", "flac", "ogg"]:
         return "audio"
-    elif ext in ["mp4"]:
+    elif ext in ["mp4", "avi", "mov", "mkv", "webm"]:
         return "video"
-    elif ext in ["jpg", "jpeg", "png"]:
+    elif ext in ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "webp"]:
         return "image"
+    elif ext in ["docx"]:
+        return "docx"
+    elif ext in ["xlsx", "xls"]:
+        return "xlsx"
+    elif ext in ["pptx", "ppt"]:
+        return "pptx"
     else:
         return "unknown"

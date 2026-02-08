@@ -9,13 +9,19 @@ _whisper_model = None
 
 
 def get_whisper_model(model_size: str = "medium"):
-    """Load Whisper model (lazy loading)"""
+    """Load Whisper model (lazy loading) - forces CPU for low VRAM systems"""
     global _whisper_model
     
     if _whisper_model is None:
         import whisper
+        import torch
         from app.config import WHISPER_MODEL
-        _whisper_model = whisper.load_model(WHISPER_MODEL)
+        
+        # Force CPU to avoid GPU memory issues on low VRAM systems
+        device = "cpu"
+        print(f"Loading Whisper model '{WHISPER_MODEL}' on {device}...")
+        _whisper_model = whisper.load_model(WHISPER_MODEL, device=device)
+        print("Whisper model loaded successfully!")
     
     return _whisper_model
 

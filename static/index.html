@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DataExtract RAG - Multimodal Document Intelligence</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="logo">
+                <div class="logo-icon">🧠</div>
+                <span>DataExtract</span>
+            </div>
+            <ul class="nav-links">
+                <li class="active" data-page="upload">
+                    <span class="nav-icon">📤</span>
+                    <span>Upload</span>
+                </li>
+                <li data-page="query">
+                    <span class="nav-icon">💬</span>
+                    <span>Query</span>
+                </li>
+                <li data-page="dashboard">
+                    <span class="nav-icon">📊</span>
+                    <span>Dashboard</span>
+                </li>
+                <li data-page="documents">
+                    <span class="nav-icon">📁</span>
+                    <span>Documents</span>
+                </li>
+            </ul>
+            <div class="sidebar-footer">
+                <div class="status-indicator">
+                    <span class="status-dot online"></span>
+                    <span>System Online</span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Upload Page -->
+            <section id="upload-page" class="page active">
+                <div class="page-header">
+                    <h1>Upload Documents</h1>
+                    <p>Upload files to build your knowledge base</p>
+                </div>
+                
+                <div class="upload-container">
+                    <div class="dropzone" id="dropzone">
+                        <div class="dropzone-content">
+                            <div class="dropzone-icon">📄</div>
+                            <h3>Drag & Drop Files Here</h3>
+                            <p>or click to browse</p>
+                            <input type="file" id="file-input" multiple accept=".pdf,.docx,.xlsx,.pptx,.jpg,.jpeg,.png,.mp3,.wav,.mp4">
+                        </div>
+                        <div class="supported-formats">
+                            <span>📄 PDF</span>
+                            <span>📝 Word</span>
+                            <span>📊 Excel</span>
+                            <span>📽️ PPT</span>
+                            <span>🖼️ Images</span>
+                            <span>🎵 Audio</span>
+                            <span>🎬 Video</span>
+                        </div>
+                    </div>
+                    
+                    <div class="upload-progress" id="upload-progress" style="display: none;">
+                        <div class="progress-header">
+                            <span id="upload-filename">Uploading file.pdf...</span>
+                            <span id="upload-status">Processing</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill"></div>
+                        </div>
+                        <div class="progress-details" id="progress-details"></div>
+                    </div>
+                    
+                    <div class="upload-results" id="upload-results"></div>
+                </div>
+            </section>
+
+            <!-- Query Page -->
+            <section id="query-page" class="page">
+                <div class="page-header">
+                    <h1>Ask Questions</h1>
+                    <p>Query your documents using natural language</p>
+                </div>
+                
+                <div class="chat-container">
+                    <div class="chat-messages" id="chat-messages">
+                        <div class="welcome-message">
+                            <div class="welcome-icon">🤖</div>
+                            <h3>Welcome to DataExtract RAG</h3>
+                            <p>Ask me anything about your uploaded documents. I'll answer based only on the information you've provided.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="chat-input-container">
+                        <textarea id="query-input" placeholder="Ask a question about your documents..." rows="1"></textarea>
+                        <button id="send-query" class="send-btn">
+                            <span>Send</span>
+                            <span class="send-icon">➤</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Dashboard Page -->
+            <section id="dashboard-page" class="page">
+                <div class="page-header">
+                    <h1>System Dashboard</h1>
+                    <p>Real-time health monitoring and data flow</p>
+                </div>
+                
+                <div class="dashboard-grid">
+                    <!-- Health Cards -->
+                    <div class="health-cards">
+                        <div class="health-card" id="mongodb-status">
+                            <div class="health-icon">🗄️</div>
+                            <div class="health-info">
+                                <h4>MongoDB Atlas</h4>
+                                <span class="health-status loading">Checking...</span>
+                            </div>
+                            <div class="health-indicator"></div>
+                        </div>
+                        
+                        <div class="health-card" id="faiss-status">
+                            <div class="health-icon">🔢</div>
+                            <div class="health-info">
+                                <h4>FAISS Vector Store</h4>
+                                <span class="health-status loading">Checking...</span>
+                            </div>
+                            <div class="health-indicator"></div>
+                        </div>
+                        
+                        <div class="health-card" id="ollama-status">
+                            <div class="health-icon">🤖</div>
+                            <div class="health-info">
+                                <h4>Ollama LLM</h4>
+                                <span class="health-status loading">Checking...</span>
+                            </div>
+                            <div class="health-indicator"></div>
+                        </div>
+                        
+                        <div class="health-card" id="embedding-status">
+                            <div class="health-icon">🧮</div>
+                            <div class="health-info">
+                                <h4>Embedding Model</h4>
+                                <span class="health-status loading">Checking...</span>
+                            </div>
+                            <div class="health-indicator"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Stats Section -->
+                    <div class="stats-section">
+                        <h3>📈 System Statistics</h3>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-value" id="stat-vectors">--</div>
+                                <div class="stat-label">Total Vectors</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="stat-documents">--</div>
+                                <div class="stat-label">Documents</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="stat-queries">--</div>
+                                <div class="stat-label">Queries Today</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="stat-embedding-dim">--</div>
+                                <div class="stat-label">Embedding Dim</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Data Flow Visualization -->
+                    <div class="dataflow-section">
+                        <h3>🔄 Data Flow Pipeline</h3>
+                        <div class="pipeline">
+                            <div class="pipeline-step">
+                                <div class="step-icon">📤</div>
+                                <div class="step-label">Upload</div>
+                            </div>
+                            <div class="pipeline-arrow">→</div>
+                            <div class="pipeline-step">
+                                <div class="step-icon">📄</div>
+                                <div class="step-label">Extract</div>
+                            </div>
+                            <div class="pipeline-arrow">→</div>
+                            <div class="pipeline-step">
+                                <div class="step-icon">✂️</div>
+                                <div class="step-label">Chunk</div>
+                            </div>
+                            <div class="pipeline-arrow">→</div>
+                            <div class="pipeline-step">
+                                <div class="step-icon">🔢</div>
+                                <div class="step-label">Embed</div>
+                            </div>
+                            <div class="pipeline-arrow">→</div>
+                            <div class="pipeline-step">
+                                <div class="step-icon">💾</div>
+                                <div class="step-label">Store</div>
+                            </div>
+                        </div>
+                        
+                        <div class="pipeline query-pipeline">
+                            <div class="pipeline-step">
+                                <div class="step-icon">❓</div>
+                                <div class="step-label">Query</div>
+                            </div>
+                            <div class="pipeline-arrow">→</div>
+                            <div class="pipeline-step">
+                                <div class="step-icon">🔍</div>
+                                <div class="step-label">Search</div>
+                            </div>
+                            <div class="pipeline-arrow">→</div>
+                            <div class="pipeline-step">
+                                <div class="step-icon">📋</div>
+                                <div class="step-label">Context</div>
+                            </div>
+                            <div class="pipeline-arrow">→</div>
+                            <div class="pipeline-step">
+                                <div class="step-icon">🤖</div>
+                                <div class="step-label">LLM</div>
+                            </div>
+                            <div class="pipeline-arrow">→</div>
+                            <div class="pipeline-step">
+                                <div class="step-icon">💬</div>
+                                <div class="step-label">Response</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Processors Status -->
+                    <div class="processors-section">
+                        <h3>⚙️ File Processors</h3>
+                        <div class="processors-grid">
+                            <div class="processor-item" id="proc-pdf">
+                                <span class="proc-icon">📄</span>
+                                <span class="proc-name">PDF (PyMuPDF)</span>
+                                <span class="proc-status">✅</span>
+                            </div>
+                            <div class="processor-item" id="proc-docx">
+                                <span class="proc-icon">📝</span>
+                                <span class="proc-name">Word (python-docx)</span>
+                                <span class="proc-status">✅</span>
+                            </div>
+                            <div class="processor-item" id="proc-xlsx">
+                                <span class="proc-icon">📊</span>
+                                <span class="proc-name">Excel (openpyxl)</span>
+                                <span class="proc-status">✅</span>
+                            </div>
+                            <div class="processor-item" id="proc-pptx">
+                                <span class="proc-icon">📽️</span>
+                                <span class="proc-name">PPT (python-pptx)</span>
+                                <span class="proc-status">✅</span>
+                            </div>
+                            <div class="processor-item" id="proc-image">
+                                <span class="proc-icon">🖼️</span>
+                                <span class="proc-name">Image (Tesseract)</span>
+                                <span class="proc-status">✅</span>
+                            </div>
+                            <div class="processor-item" id="proc-audio">
+                                <span class="proc-icon">🎵</span>
+                                <span class="proc-name">Audio (Whisper)</span>
+                                <span class="proc-status">✅</span>
+                            </div>
+                            <div class="processor-item" id="proc-video">
+                                <span class="proc-icon">🎬</span>
+                                <span class="proc-name">Video (FFmpeg+Whisper)</span>
+                                <span class="proc-status">✅</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Activity Log -->
+                    <div class="activity-section">
+                        <h3>📋 Recent Activity</h3>
+                        <div class="activity-log" id="activity-log">
+                            <div class="activity-item">
+                                <span class="activity-time">--:--</span>
+                                <span class="activity-message">Waiting for activities...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Documents Page -->
+            <section id="documents-page" class="page">
+                <div class="page-header">
+                    <h1>Document Library</h1>
+                    <p>View and manage your uploaded documents</p>
+                </div>
+                
+                <div class="documents-container">
+                    <div class="documents-list" id="documents-list">
+                        <div class="empty-state">
+                            <div class="empty-icon">📁</div>
+                            <p>No documents uploaded yet</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

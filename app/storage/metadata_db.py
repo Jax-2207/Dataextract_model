@@ -1,91 +1,72 @@
 """
-PostgreSQL Metadata Database for storing document information
+MongoDB Atlas Metadata Database for storing document information
 """
 import os
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
-# Try to import psycopg2, but make it optional
+# Try to import pymongo, but make it optional
 try:
-    import psycopg2
-    from psycopg2.extras import RealDictCursor
-    POSTGRES_AVAILABLE = True
+    from pymongo import MongoClient
+    from pymongo.errors import ConnectionFailure, OperationFailure
+    from bson import ObjectId
+    MONGODB_AVAILABLE = True
 except ImportError:
-    POSTGRES_AVAILABLE = False
+    MONGODB_AVAILABLE = False
 
-from app.config import (
-    POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB,
-    POSTGRES_USER, POSTGRES_PASSWORD
-)
+from app.config import MONGODB_URI, MONGODB_DB_NAME
 
 
-def get_connection():
-    """Get a PostgreSQL connection"""
-    if not POSTGRES_AVAILABLE:
-        raise RuntimeError("psycopg2 not installed. Run: pip install psycopg2-binary")
+# Global client instance for connection reuse
+_client: Optional["MongoClient"] = None
+_db = None
+
+
+def get_client():
+    """Get or create a MongoDB client (singleton pattern)"""
+    global _client
+    if not MONGODB_AVAILABLE:
+        raise RuntimeError("pymongo not installed. Run: pip install pymongo dnspython")
     
-    return psycopg2.connect(
-        host=POSTGRES_HOST,
-        port=POSTGRES_PORT,
-        database=POSTGRES_DB,
-        user=POSTGRES_USER,
-        password=POSTGRES_PASSWORD
-    )
+    if _client is None:
+        _client = MongoClient(MONGODB_URI)
+    return _client
+
+
+def get_database():
+    """Get the database instance"""
+    global _db
+    if _db is None:
+        client = get_client()
+        _db = client[MONGODB_DB_NAME]
+    return _db
 
 
 def init_database():
-    """Initialize the database tables"""
-    if not POSTGRES_AVAILABLE:
-        print("Warning: PostgreSQL not available. Skipping database initialization.")
+    """Initialize the database collections and indexes"""
+    if not MONGODB_AVAILABLE:
+        print("Warning: MongoDB not available. Skipping database initialization.")
         return
     
     try:
-        conn = get_connection()
-        cur = conn.cursor()
+        db = get_database()
         
-        # Create documents table
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS documents (
-                id SERIAL PRIMARY KEY,
-                filename VARCHAR(255) NOT NULL,
-                file_path TEXT NOT NULL,
-                file_type VARCHAR(50) NOT NULL,
-                file_size BIGINT,
-                upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                processed BOOLEAN DEFAULT FALSE,
-                chunk_count INTEGER DEFAULT 0,
-                metadata JSONB
-            )
-        """)
+        # Create indexes for better query performance
+        # Documents collection
+        db.documents.create_index("filename")
+        db.documents.create_index("file_type")
+        db.documents.create_index("upload_time")
+        db.documents.create_index("processed")
         
-        # Create chunks table
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS chunks (
-                id SERIAL PRIMARY KEY,
-                document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
-                chunk_index INTEGER NOT NULL,
-                text_content TEXT NOT NULL,
-                vector_index INTEGER,
-                metadata JSONB
-            )
-        """)
+        # Chunks collection
+        db.chunks.create_index("document_id")
+        db.chunks.create_index([("document_id", 1), ("chunk_index", 1)])
         
-        # Create processing_logs table
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS processing_logs (
-                id SERIAL PRIMARY KEY,
-                document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
-                status VARCHAR(50) NOT NULL,
-                message TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+        # Processing logs collection
+        db.processing_logs.create_index("document_id")
+        db.processing_logs.create_index("timestamp")
         
-        conn.commit()
-        cur.close()
-        conn.close()
-        
-        print("Database tables initialized successfully")
+        print("MongoDB collections and indexes initialized successfully")
         
     except Exception as e:
         print(f"Error initializing database: {e}")
@@ -97,102 +78,90 @@ def insert_document(
     file_type: str,
     file_size: Optional[int] = None,
     metadata: Optional[Dict] = None
-) -> Optional[int]:
-    """Insert a new document record"""
-    if not POSTGRES_AVAILABLE:
+) -> Optional[str]:
+    """Insert a new document record. Returns the document ID as string."""
+    if not MONGODB_AVAILABLE:
         return None
     
     try:
-        conn = get_connection()
-        cur = conn.cursor()
+        db = get_database()
         
-        cur.execute("""
-            INSERT INTO documents (filename, file_path, file_type, file_size, metadata)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING id
-        """, (filename, file_path, file_type, file_size, 
-              psycopg2.extras.Json(metadata) if metadata else None))
+        document = {
+            "filename": filename,
+            "file_path": file_path,
+            "file_type": file_type,
+            "file_size": file_size,
+            "upload_time": datetime.utcnow(),
+            "processed": False,
+            "chunk_count": 0,
+            "metadata": metadata or {}
+        }
         
-        doc_id = cur.fetchone()[0]
-        conn.commit()
-        cur.close()
-        conn.close()
-        
-        return doc_id
+        result = db.documents.insert_one(document)
+        return str(result.inserted_id)
         
     except Exception as e:
         print(f"Error inserting document: {e}")
         return None
 
 
-def update_document_processed(doc_id: int, chunk_count: int):
+def update_document_processed(doc_id: str, chunk_count: int):
     """Mark document as processed with chunk count"""
-    if not POSTGRES_AVAILABLE:
+    if not MONGODB_AVAILABLE:
         return
     
     try:
-        conn = get_connection()
-        cur = conn.cursor()
+        db = get_database()
         
-        cur.execute("""
-            UPDATE documents 
-            SET processed = TRUE, chunk_count = %s
-            WHERE id = %s
-        """, (chunk_count, doc_id))
-        
-        conn.commit()
-        cur.close()
-        conn.close()
+        db.documents.update_one(
+            {"_id": ObjectId(doc_id)},
+            {"$set": {"processed": True, "chunk_count": chunk_count}}
+        )
         
     except Exception as e:
         print(f"Error updating document: {e}")
 
 
-def insert_chunks(doc_id: int, chunks: List[Dict[str, Any]]):
+def insert_chunks(doc_id: str, chunks: List[Dict[str, Any]]):
     """Insert multiple chunks for a document"""
-    if not POSTGRES_AVAILABLE:
+    if not MONGODB_AVAILABLE:
         return
     
     try:
-        conn = get_connection()
-        cur = conn.cursor()
+        db = get_database()
         
+        chunk_documents = []
         for chunk in chunks:
-            cur.execute("""
-                INSERT INTO chunks (document_id, chunk_index, text_content, vector_index, metadata)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (
-                doc_id,
-                chunk.get('chunk_id', 0),
-                chunk.get('text', ''),
-                chunk.get('vector_index'),
-                psycopg2.extras.Json(chunk) if chunk else None
-            ))
+            chunk_doc = {
+                "document_id": doc_id,
+                "chunk_index": chunk.get("chunk_id", 0),
+                "text_content": chunk.get("text", ""),
+                "vector_index": chunk.get("vector_index"),
+                "metadata": chunk
+            }
+            chunk_documents.append(chunk_doc)
         
-        conn.commit()
-        cur.close()
-        conn.close()
+        if chunk_documents:
+            db.chunks.insert_many(chunk_documents)
         
     except Exception as e:
         print(f"Error inserting chunks: {e}")
 
 
-def get_document(doc_id: int) -> Optional[Dict[str, Any]]:
+def get_document(doc_id: str) -> Optional[Dict[str, Any]]:
     """Get document by ID"""
-    if not POSTGRES_AVAILABLE:
+    if not MONGODB_AVAILABLE:
         return None
     
     try:
-        conn = get_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        db = get_database()
         
-        cur.execute("SELECT * FROM documents WHERE id = %s", (doc_id,))
-        result = cur.fetchone()
+        result = db.documents.find_one({"_id": ObjectId(doc_id)})
         
-        cur.close()
-        conn.close()
-        
-        return dict(result) if result else None
+        if result:
+            result["id"] = str(result.pop("_id"))
+            return result
+        return None
         
     except Exception as e:
         print(f"Error getting document: {e}")
@@ -201,65 +170,138 @@ def get_document(doc_id: int) -> Optional[Dict[str, Any]]:
 
 def get_all_documents() -> List[Dict[str, Any]]:
     """Get all documents"""
-    if not POSTGRES_AVAILABLE:
+    if not MONGODB_AVAILABLE:
         return []
     
     try:
-        conn = get_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        db = get_database()
         
-        cur.execute("SELECT * FROM documents ORDER BY upload_time DESC")
-        results = cur.fetchall()
+        results = db.documents.find().sort("upload_time", -1)
         
-        cur.close()
-        conn.close()
+        documents = []
+        for doc in results:
+            doc["id"] = str(doc.pop("_id"))
+            documents.append(doc)
         
-        return [dict(r) for r in results]
+        return documents
         
     except Exception as e:
         print(f"Error getting documents: {e}")
         return []
 
 
-def log_processing(doc_id: int, status: str, message: Optional[str] = None):
+def get_document_chunks(doc_id: str) -> List[Dict[str, Any]]:
+    """Get all chunks for a document"""
+    if not MONGODB_AVAILABLE:
+        return []
+    
+    try:
+        db = get_database()
+        
+        results = db.chunks.find({"document_id": doc_id}).sort("chunk_index", 1)
+        
+        chunks = []
+        for chunk in results:
+            chunk["id"] = str(chunk.pop("_id"))
+            chunks.append(chunk)
+        
+        return chunks
+        
+    except Exception as e:
+        print(f"Error getting chunks: {e}")
+        return []
+
+
+def log_processing(doc_id: str, status: str, message: Optional[str] = None):
     """Log a processing event"""
-    if not POSTGRES_AVAILABLE:
+    if not MONGODB_AVAILABLE:
         return
     
     try:
-        conn = get_connection()
-        cur = conn.cursor()
+        db = get_database()
         
-        cur.execute("""
-            INSERT INTO processing_logs (document_id, status, message)
-            VALUES (%s, %s, %s)
-        """, (doc_id, status, message))
+        log_entry = {
+            "document_id": doc_id,
+            "status": status,
+            "message": message,
+            "timestamp": datetime.utcnow()
+        }
         
-        conn.commit()
-        cur.close()
-        conn.close()
+        db.processing_logs.insert_one(log_entry)
         
     except Exception as e:
         print(f"Error logging processing: {e}")
 
 
-def delete_document(doc_id: int) -> bool:
+def get_processing_logs(doc_id: str) -> List[Dict[str, Any]]:
+    """Get processing logs for a document"""
+    if not MONGODB_AVAILABLE:
+        return []
+    
+    try:
+        db = get_database()
+        
+        results = db.processing_logs.find({"document_id": doc_id}).sort("timestamp", 1)
+        
+        logs = []
+        for log in results:
+            log["id"] = str(log.pop("_id"))
+            logs.append(log)
+        
+        return logs
+        
+    except Exception as e:
+        print(f"Error getting processing logs: {e}")
+        return []
+
+
+def delete_document(doc_id: str) -> bool:
     """Delete a document and its chunks"""
-    if not POSTGRES_AVAILABLE:
+    if not MONGODB_AVAILABLE:
         return False
     
     try:
-        conn = get_connection()
-        cur = conn.cursor()
+        db = get_database()
         
-        cur.execute("DELETE FROM documents WHERE id = %s", (doc_id,))
+        # Delete associated chunks first
+        db.chunks.delete_many({"document_id": doc_id})
         
-        conn.commit()
-        cur.close()
-        conn.close()
+        # Delete processing logs
+        db.processing_logs.delete_many({"document_id": doc_id})
         
-        return True
+        # Delete the document
+        result = db.documents.delete_one({"_id": ObjectId(doc_id)})
+        
+        return result.deleted_count > 0
         
     except Exception as e:
         print(f"Error deleting document: {e}")
+        return False
+
+
+def close_connection():
+    """Close the MongoDB connection"""
+    global _client, _db
+    if _client is not None:
+        _client.close()
+        _client = None
+        _db = None
+
+
+def test_connection() -> bool:
+    """Test the MongoDB connection"""
+    if not MONGODB_AVAILABLE:
+        return False
+    
+    try:
+        client = get_client()
+        # The ping command is cheap and doesn't require auth
+        client.admin.command('ping')
+        print("MongoDB connection successful!")
+        return True
+    except ConnectionFailure as e:
+        print(f"MongoDB connection failed: {e}")
+        return False
+    except Exception as e:
+        print(f"MongoDB connection error: {e}")
         return False

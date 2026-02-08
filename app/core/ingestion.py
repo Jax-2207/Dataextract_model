@@ -82,6 +82,18 @@ def extract_content(file_path: str, file_type: str) -> str:
         from app.processors.video import video_to_text
         return video_to_text(file_path)
     
+    elif file_type == "docx":
+        from app.processors.document import extract_text_from_docx
+        return extract_text_from_docx(file_path)
+    
+    elif file_type == "xlsx":
+        from app.processors.document import extract_text_from_xlsx
+        return extract_text_from_xlsx(file_path)
+    
+    elif file_type == "pptx":
+        from app.processors.document import extract_text_from_pptx
+        return extract_text_from_pptx(file_path)
+    
     else:
         return ""
 

@@ -14,10 +14,10 @@ FAISS_DIR = os.path.join(DATA_DIR, "faiss")
 for dir_path in [UPLOAD_DIR, PROCESSED_DIR, FAISS_DIR]:
     os.makedirs(dir_path, exist_ok=True)
 
-# Embedding settings
-# Options: "BAAI/bge-base-en" (768), "BAAI/bge-large-en-v1.5" (1024), "intfloat/e5-large-v2" (1024)
-EMBEDDING_MODEL = "BAAI/bge-large-en-v1.5"
-EMBEDDING_DIM = 1024
+# Embedding settings - optimized for 4GB VRAM
+# Options: "BAAI/bge-small-en" (384), "BAAI/bge-base-en" (768), "BAAI/bge-large-en-v1.5" (1024)
+EMBEDDING_MODEL = "BAAI/bge-base-en"  # Smaller, faster model for 4GB VRAM
+EMBEDDING_DIM = 768
 
 # Chunking settings - smaller chunks with more overlap for better precision
 CHUNK_SIZE = 400  # Smaller chunks capture more precise context
@@ -25,23 +25,23 @@ CHUNK_OVERLAP = 100  # More overlap prevents information loss at boundaries
 
 # LLM settings
 LLM_MODEL_ID = "meta-llama/Llama-3-8B-Instruct"
-OLLAMA_MODEL = "llama3.1"  # For local Ollama usage
+OLLAMA_MODEL = "llama3.2:3b"  # Smaller model for 4GB VRAM
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 # OCR settings
 USE_PADDLEOCR = True  # Set to False to use Tesseract as primary
 PADDLEOCR_LANG = "en"
 
-# Whisper settings - larger model for better accuracy
+# Whisper settings - using smallest model for fast processing
 # Options: "tiny", "base", "small", "medium", "large", "large-v2", "large-v3"
-WHISPER_MODEL = "large-v3"  # Best accuracy, requires ~10GB VRAM (use "medium" for less GPU)
+WHISPER_MODEL = "tiny"  # Fastest processing for 4GB VRAM
 
-# PostgreSQL settings
-POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
-POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
-POSTGRES_DB = os.getenv("POSTGRES_DB", "multimodal_rag")
-POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres")
+# MongoDB Atlas settings
+MONGODB_URI = os.getenv(
+    "MONGODB_URI", 
+    "mongodb+srv://jaywani22_db_user:JAYwani$22@cluster0.sn1qqyk.mongodb.net/?appName=Cluster0"
+)
+MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "multimodal_rag")
 
 # FAISS settings
 FAISS_INDEX_PATH = os.path.join(FAISS_DIR, "index.faiss")
