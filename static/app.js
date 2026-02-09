@@ -228,9 +228,16 @@ async function sendQuery() {
         document.getElementById(`msg-${loadingId}`)?.remove();
 
         if (response.ok) {
-            addMessage(messagesContainer, result.answer, 'assistant', null, result.sources);
+            // Add confidence badge to answer
+            const confidenceInfo = {
+                score: result.confidence_score,
+                source: result.source,
+                offerInternet: result.offer_internet
+            };
+
+            addMessage(messagesContainer, result.answer, 'assistant', null, result.sources, confidenceInfo, question);
             queryCount++;
-            addActivity(`Query: "${question.substring(0, 50)}..."`);
+            addActivity(`Query: "${question.substring(0, 50)}..." (${result.confidence_score}% confidence)`);
         } else {
             addMessage(messagesContainer, `Error: ${result.detail}`, 'assistant');
         }
@@ -244,7 +251,51 @@ async function sendQuery() {
     document.getElementById('stat-queries').textContent = queryCount;
 }
 
-function addMessage(container, text, type, id = null, sources = null) {
+// Internet search when confidence is low
+async function searchInternet(question) {
+    const messagesContainer = document.getElementById('chat-messages');
+
+    // Add loading message
+    const loadingId = Date.now();
+    addMessage(messagesContainer, '🌐 Searching with general knowledge...', 'assistant', loadingId);
+
+    try {
+        const response = await fetch(`${API_BASE}/query/internet`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question, save_if_confident: true })
+        });
+
+        const result = await response.json();
+
+        // Remove loading message
+        document.getElementById(`msg-${loadingId}`)?.remove();
+
+        if (response.ok) {
+            const confidenceInfo = {
+                score: result.confidence_score,
+                source: 'internet',
+                savedToDb: result.saved_to_db
+            };
+
+            let answer = result.answer;
+            if (result.saved_to_db) {
+                answer += '\n\n✅ *This answer has been saved for future reference.*';
+            }
+
+            addMessage(messagesContainer, answer, 'assistant', null, null, confidenceInfo, null);
+            addActivity(`Internet search: "${question.substring(0, 40)}..." (${result.confidence_score}%${result.saved_to_db ? ', saved' : ''})`);
+        } else {
+            addMessage(messagesContainer, `Error: ${result.detail}`, 'assistant');
+        }
+
+    } catch (error) {
+        document.getElementById(`msg-${loadingId}`)?.remove();
+        addMessage(messagesContainer, `Error: ${error.message}`, 'assistant');
+    }
+}
+
+function addMessage(container, text, type, id = null, sources = null, confidenceInfo = null, originalQuestion = null) {
     const div = document.createElement('div');
     div.className = `message message-${type}`;
     if (id) div.id = `msg-${id}`;
@@ -254,12 +305,58 @@ function addMessage(container, text, type, id = null, sources = null) {
     } else {
         let sourcesHtml = '';
         if (sources && sources.length > 0) {
-            const sourcesList = sources.map(s => s.file).filter((v, i, a) => a.indexOf(v) === i);
+            const sourcesList = sources.map(s => s.file || s.type).filter((v, i, a) => a.indexOf(v) === i);
             sourcesHtml = `
                 <div class="message-sources">
                     📄 Sources: ${sourcesList.join(', ')}
                 </div>
             `;
+        }
+
+        // Confidence badge
+        let confidenceHtml = '';
+        if (confidenceInfo && confidenceInfo.score !== undefined) {
+            const score = confidenceInfo.score;
+            let badgeClass = 'confidence-high';
+            let badgeIcon = '✓';
+
+            if (score < 60) {
+                badgeClass = 'confidence-low';
+                badgeIcon = '⚠️';
+            } else if (score < 80) {
+                badgeClass = 'confidence-medium';
+                badgeIcon = '~';
+            }
+
+            const sourceLabel = confidenceInfo.source === 'learned' ? '📚 Learned' :
+                confidenceInfo.source === 'internet' ? '🌐 Internet' : '📄 Local DB';
+
+            confidenceHtml = `
+                <div class="confidence-badge ${badgeClass}">
+                    <span class="confidence-score">${badgeIcon} ${score}% Confidence</span>
+                    <span class="confidence-source">${sourceLabel}</span>
+                </div>
+            `;
+        }
+
+        // Internet search button (when confidence is low)
+        let internetBtnHtml = '';
+        if (confidenceInfo && confidenceInfo.offerInternet && originalQuestion) {
+            const escapedQuestion = originalQuestion.replace(/'/g, "\\'").replace(/"/g, '\\"');
+            internetBtnHtml = `
+                <div class="internet-search-offer">
+                    <p>💡 Low confidence answer. Want me to search using general knowledge?</p>
+                    <button class="internet-search-btn" onclick="searchInternet('${escapedQuestion}')">
+                        🌐 Search Internet
+                    </button>
+                </div>
+            `;
+        }
+
+        // Saved indicator
+        let savedHtml = '';
+        if (confidenceInfo && confidenceInfo.savedToDb) {
+            savedHtml = `<div class="saved-indicator">✅ Saved for future reference</div>`;
         }
 
         // Parse markdown for assistant messages
@@ -268,8 +365,11 @@ function addMessage(container, text, type, id = null, sources = null) {
         div.innerHTML = `
             <div class="message-avatar">🤖</div>
             <div class="message-content">
+                ${confidenceHtml}
                 ${formattedText}
                 ${sourcesHtml}
+                ${savedHtml}
+                ${internetBtnHtml}
             </div>
         `;
     }

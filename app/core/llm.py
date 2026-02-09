@@ -183,3 +183,136 @@ def generate_with_ollama_chat(messages: list, max_tokens: int = 500) -> str:
             
     except Exception as e:
         return f"Error generating response: {str(e)}"
+
+
+def generate_with_confidence(prompt: str, context: str, question: str, max_tokens: int = 1000) -> dict:
+    """
+    Generate a response with confidence score.
+    
+    Returns:
+        dict with 'answer', 'confidence_score', and 'reasoning'
+    """
+    try:
+        from groq import Groq
+        
+        client = Groq(api_key=GROQ_API_KEY)
+        
+        confidence_prompt = f"""You are a RAG assistant. Answer the question based ONLY on the provided context.
+
+CONTEXT FROM UPLOADED FILES:
+---
+{context}
+---
+
+QUESTION: {question}
+
+INSTRUCTIONS:
+1. Answer the question using ONLY the context above
+2. Rate your confidence (0-100%) based on how well the context answers the question
+3. If the context doesn't contain relevant information, confidence should be LOW (below 30%)
+
+Respond in this EXACT format:
+ANSWER: [Your answer here]
+CONFIDENCE: [0-100]
+REASONING: [Why you gave this confidence score]"""
+
+        response = client.chat.completions.create(
+            model=GROQ_LLM_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that provides answers with confidence scores."},
+                {"role": "user", "content": confidence_prompt}
+            ],
+            max_tokens=max_tokens,
+            temperature=0.2,
+        )
+        
+        result_text = response.choices[0].message.content
+        return parse_confidence_response(result_text)
+        
+    except Exception as e:
+        return {
+            "answer": f"Error: {str(e)}",
+            "confidence_score": 0,
+            "reasoning": "Error occurred during generation"
+        }
+
+
+def generate_internet_answer(question: str, max_tokens: int = 1000) -> dict:
+    """
+    Generate an answer using the LLM's general knowledge (internet mode).
+    
+    Returns:
+        dict with 'answer', 'confidence_score', and 'reasoning'
+    """
+    try:
+        from groq import Groq
+        
+        client = Groq(api_key=GROQ_API_KEY)
+        
+        internet_prompt = f"""You are a knowledgeable educational assistant. Answer the following question using your training knowledge.
+
+QUESTION: {question}
+
+INSTRUCTIONS:
+1. Provide a comprehensive, accurate answer
+2. Rate your confidence (0-100%) based on how certain you are of the accuracy
+3. Only give high confidence (90%+) if you're very sure the information is accurate
+
+Respond in this EXACT format:
+ANSWER: [Your detailed answer here]
+CONFIDENCE: [0-100]
+REASONING: [Why you gave this confidence score]"""
+
+        response = client.chat.completions.create(
+            model=GROQ_LLM_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a helpful educational assistant with broad knowledge."},
+                {"role": "user", "content": internet_prompt}
+            ],
+            max_tokens=max_tokens,
+            temperature=0.3,
+        )
+        
+        result_text = response.choices[0].message.content
+        return parse_confidence_response(result_text)
+        
+    except Exception as e:
+        return {
+            "answer": f"Error: {str(e)}",
+            "confidence_score": 0,
+            "reasoning": "Error occurred during generation"
+        }
+
+
+def parse_confidence_response(text: str) -> dict:
+    """
+    Parse the structured response with answer and confidence.
+    """
+    import re
+    
+    result = {
+        "answer": "",
+        "confidence_score": 50,
+        "reasoning": ""
+    }
+    
+    # Extract ANSWER
+    answer_match = re.search(r'ANSWER:\s*(.+?)(?=CONFIDENCE:|$)', text, re.DOTALL | re.IGNORECASE)
+    if answer_match:
+        result["answer"] = answer_match.group(1).strip()
+    else:
+        # If no format found, use the whole text as answer
+        result["answer"] = text.strip()
+    
+    # Extract CONFIDENCE
+    confidence_match = re.search(r'CONFIDENCE:\s*(\d+)', text, re.IGNORECASE)
+    if confidence_match:
+        result["confidence_score"] = min(100, max(0, int(confidence_match.group(1))))
+    
+    # Extract REASONING
+    reasoning_match = re.search(r'REASONING:\s*(.+?)$', text, re.DOTALL | re.IGNORECASE)
+    if reasoning_match:
+        result["reasoning"] = reasoning_match.group(1).strip()
+    
+    return result
+
