@@ -1,0 +1,37 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Large files and uploads
+data/uploads/
+uploads/
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.wmv
+
+# Installers
+*.exe
+*.msi
+
+# IDE
+.vscode/
+.idea/
+
+# Environment variables
+.env
+
+# Database
+*.db
+*.sqlite3
+chroma_db/
+
+# Logs
+*.log
