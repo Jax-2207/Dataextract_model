@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
 
-from app.core.embeddings import get_embeddings
+from app.core.embeddings import get_query_embeddings
 from app.storage.vector_store import search_vectors, get_chunks_by_indices
 from app.core.llm import generate_response
 
@@ -33,8 +33,8 @@ async def ask_question(request: QueryRequest):
     4. Generate response using LLM
     """
     try:
-        # Step 1: Embed the question
-        question_embedding = get_embeddings([request.question])
+        # Step 1: Embed the question using query-optimized embeddings
+        question_embedding = get_query_embeddings(request.question)
         
         # Step 2: Search for relevant chunks
         distances, indices = search_vectors(question_embedding, k=request.top_k)
@@ -61,37 +61,30 @@ async def ask_question(request: QueryRequest):
         
         context = "\n\n".join(context_parts)
         
-        # Step 5: Generate response using LLM with teacher-style prompt
-        prompt = f"""You are a friendly, patient, and expert teacher on an educational platform. Think like ChatGPT or Gemini - be conversational, clear, and helpful.
+        # Step 5: Generate response using LLM with strict context-only prompt
+        prompt = f"""You are a helpful teacher assistant on an educational platform.
 
-FORMATTING RULES (IMPORTANT):
-1. **For coding questions**: Always use markdown code blocks with language specification:
-   ```python
-   print("Hello World")
-   ```
-2. **For math/equations**: Use clear notation like: x² + 2x + 1 = 0, or step-by-step:
-   Step 1: ...
-   Step 2: ...
+CRITICAL RULES - YOU MUST FOLLOW THESE:
+1. ONLY use information from the "CONTEXT FROM UPLOADED FILES" section below
+2. DO NOT use any external knowledge or information from the internet
+3. If the answer is not found in the context, say: "I couldn't find information about this in your uploaded documents. Please upload relevant materials."
+4. Always cite which part of the uploaded content you're referencing
+
+FORMATTING RULES:
+1. **For code**: Use markdown code blocks with language specification
+2. **For math**: Show step-by-step solutions
 3. **Use bullet points** and numbered lists for clarity
-4. **Bold** important terms and concepts
-5. **Break down complex topics** into simple, digestible parts
-6. Be warm, encouraging, and conversational - like a friend who's great at teaching
+4. **Bold** important terms
+5. Be friendly and conversational
 
-YOUR TEACHING APPROACH:
-- Start with a brief, friendly acknowledgment of the question
-- Explain concepts step-by-step with examples
-- Use analogies when helpful
-- End with encouragement or a tip for further learning
-- If the uploaded content covers the topic, use it. Otherwise, teach from your knowledge and mention you're adding context
-
-LEARNING MATERIALS FROM STUDENT'S UPLOADS:
+CONTEXT FROM UPLOADED FILES:
 ---
 {context}
 ---
 
 STUDENT'S QUESTION: {request.question}
 
-YOUR RESPONSE (be like ChatGPT - friendly, well-formatted, easy to understand):"""
+YOUR RESPONSE (ONLY use the context above, do NOT use external knowledge):"""
         
         answer = generate_response(prompt, max_tokens=800)
         

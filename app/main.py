@@ -8,6 +8,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from app.api import upload, query
+from app.config import (
+    USE_CLOUD_LLM, USE_CLOUD_WHISPER, USE_CLOUD_EMBEDDINGS, USE_CLOUDINARY,
+    print_config_status
+)
 
 # Get base directory
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -38,6 +42,12 @@ app.include_router(upload.router, prefix="/upload", tags=["Upload"])
 app.include_router(query.router, prefix="/query", tags=["Query"])
 
 
+@app.on_event("startup")
+def startup_event():
+    """Print configuration status on startup"""
+    print_config_status()
+
+
 @app.get("/")
 def home():
     """Serve the main UI"""
@@ -47,7 +57,12 @@ def home():
     return {
         "message": "Multimodal RAG backend is running",
         "version": "1.0.0",
-        "ui": "Static files not found. Place index.html in /static folder.",
+        "cloud_apis": {
+            "llm": "Groq (llama-3.3-70b)" if USE_CLOUD_LLM else "Local Ollama",
+            "whisper": "Groq (whisper-large-v3)" if USE_CLOUD_WHISPER else "Local Whisper",
+            "embeddings": "Cohere (embed-v3)" if USE_CLOUD_EMBEDDINGS else "Local BGE",
+            "storage": "Cloudinary" if USE_CLOUDINARY else "Local"
+        },
         "endpoints": {
             "upload": "/upload",
             "query": "/query",
@@ -61,6 +76,12 @@ def health_check():
     """Comprehensive health check endpoint for dashboard"""
     health = {
         "status": "healthy",
+        "cloud_apis": {
+            "llm": "Groq" if USE_CLOUD_LLM else "Ollama (local)",
+            "whisper": "Groq" if USE_CLOUD_WHISPER else "Local",
+            "embeddings": "Cohere" if USE_CLOUD_EMBEDDINGS else "Local",
+            "storage": "Cloudinary" if USE_CLOUDINARY else "Local"
+        },
         "components": {}
     }
     
@@ -86,20 +107,26 @@ def health_check():
     except Exception as e:
         health["components"]["faiss"] = {"status": "unhealthy", "message": str(e)}
     
-    # Check Ollama
-    try:
-        import requests
-        response = requests.get("http://localhost:11434/api/tags", timeout=2)
-        if response.status_code == 200:
-            models = [m["name"] for m in response.json().get("models", [])]
-            health["components"]["ollama"] = {
-                "status": "healthy",
-                "models": models
-            }
-        else:
-            health["components"]["ollama"] = {"status": "unhealthy", "message": "Not responding"}
-    except:
-        health["components"]["ollama"] = {"status": "unhealthy", "message": "Offline"}
+    # Check cloud LLM or local Ollama
+    if USE_CLOUD_LLM:
+        try:
+            from groq import Groq
+            from app.config import GROQ_API_KEY
+            client = Groq(api_key=GROQ_API_KEY)
+            health["components"]["llm"] = {"status": "healthy", "provider": "Groq", "model": "llama-3.3-70b"}
+        except Exception as e:
+            health["components"]["llm"] = {"status": "unhealthy", "message": str(e)}
+    else:
+        try:
+            import requests
+            response = requests.get("http://localhost:11434/api/tags", timeout=2)
+            if response.status_code == 200:
+                models = [m["name"] for m in response.json().get("models", [])]
+                health["components"]["llm"] = {"status": "healthy", "provider": "Ollama", "models": models}
+            else:
+                health["components"]["llm"] = {"status": "unhealthy", "message": "Ollama not responding"}
+        except:
+            health["components"]["llm"] = {"status": "unhealthy", "message": "Ollama offline"}
     
     return health
 

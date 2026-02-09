@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 from typing import List, Dict, Any, Optional
 
-from app.processors.audio import audio_to_text, audio_to_text_with_timestamps
+from app.processors.audio import transcribe_audio
 
 
 def extract_audio_from_video(video_path: str, output_path: Optional[str] = None) -> str:
@@ -152,9 +152,9 @@ def video_to_text(video_path: str) -> str:
     audio_path = extract_audio_from_video(video_path)
     
     try:
-        # Transcribe
-        text = audio_to_text(audio_path)
-        return text
+        # Transcribe using cloud or local
+        result = transcribe_audio(audio_path)
+        return result.get("text", "")
     finally:
         # Cleanup temp audio file
         if os.path.exists(audio_path):
@@ -187,10 +187,10 @@ def process_video(
     metadata = extract_video_metadata(video_path)
     result["metadata"] = metadata
     
-    # Extract and transcribe audio
+    # Extract and transcribe audio using cloud or local
     try:
         audio_path = extract_audio_from_video(video_path)
-        transcription = audio_to_text_with_timestamps(audio_path)
+        transcription = transcribe_audio(audio_path)
         result["text"] = transcription.get("text", "")
         result["segments"] = transcription.get("segments", [])
         result["language"] = transcription.get("language", "unknown")
