@@ -30,7 +30,7 @@ transformers>=4.35.0
 torch>=2.0.0
 open-clip-torch>=2.23.0
 
-# Embeddings
+# Embeddings (local fallback)
 sentence-transformers>=2.2.2
 
 # Vector store
@@ -45,6 +45,18 @@ numpy>=1.24.0
 requests>=2.31.0
 tqdm>=4.66.0
 
-# LLM (optional - for transformers-based LLM)
-# accelerate>=0.24.0
-# bitsandbytes>=0.41.0
+# =============================================================================
+# CLOUD APIs (FREE TIER)
+# =============================================================================
+
+# Groq - LLM and Whisper transcription (FREE: 14,400 requests/day)
+groq>=0.4.0
+
+# Cohere - Embeddings (FREE: 1000 requests/min)
+cohere>=4.40.0
+
+# Cloudinary - File storage (FREE: 25GB)
+cloudinary>=1.36.0
+
+# Environment variables
+python-dotenv>=1.0.0

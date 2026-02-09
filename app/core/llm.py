@@ -1,15 +1,14 @@
 """
 LLM integration for response generation
-Supports both local Ollama and HuggingFace transformers
+Supports Groq API (cloud) and local Ollama
 """
 import os
 from typing import Optional
 
-# Configuration
-USE_OLLAMA = True  # Set to False to use HuggingFace transformers
+from app.config import USE_CLOUD_LLM, GROQ_API_KEY, GROQ_LLM_MODEL
 
 
-def generate_response(prompt: str, max_tokens: int = 500) -> str:
+def generate_response(prompt: str, max_tokens: int = 1000) -> str:
     """
     Generate a response using LLM.
     
@@ -20,10 +19,57 @@ def generate_response(prompt: str, max_tokens: int = 500) -> str:
     Returns:
         Generated response text
     """
-    if USE_OLLAMA:
-        return generate_with_ollama(prompt, max_tokens)
+    if USE_CLOUD_LLM:
+        return generate_with_groq(prompt, max_tokens)
     else:
-        return generate_with_transformers(prompt, max_tokens)
+        return generate_with_ollama(prompt, max_tokens)
+
+
+def generate_with_groq(prompt: str, max_tokens: int = 1000) -> str:
+    """
+    Generate response using Groq API (FREE, ultra-fast).
+    
+    Uses llama-3.3-70b-versatile - much more capable than local 3B models.
+    Free tier: 14,400 requests/day
+    """
+    try:
+        from groq import Groq
+        
+        client = Groq(api_key=GROQ_API_KEY)
+        
+        # Use chat completion for better responses
+        response = client.chat.completions.create(
+            model=GROQ_LLM_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are a RAG (Retrieval-Augmented Generation) assistant for an educational platform.
+
+CRITICAL RULES:
+1. ONLY answer based on the context/documents provided in the user's message
+2. DO NOT use your general knowledge or training data
+3. If the context doesn't contain the answer, say "I couldn't find this in your uploaded documents"
+4. Always reference the source material when answering
+5. Format responses clearly with markdown when appropriate"""
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            max_tokens=max_tokens,
+            temperature=0.3,
+            top_p=0.9,
+        )
+        
+        return response.choices[0].message.content
+        
+    except Exception as e:
+        error_msg = str(e)
+        if "rate_limit" in error_msg.lower():
+            print("Groq rate limit hit, falling back to local Ollama...")
+            return generate_with_ollama(prompt, max_tokens)
+        return f"Error with Groq API: {error_msg}"
 
 
 def generate_with_ollama(prompt: str, max_tokens: int = 500) -> str:
@@ -52,7 +98,7 @@ def generate_with_ollama(prompt: str, max_tokens: int = 500) -> str:
                         "num_predict": max_tokens,
                         "temperature": 0.3,
                         "top_p": 0.9,
-                        "num_ctx": 4096,  # Reduced context for 4GB VRAM
+                        "num_ctx": 4096,
                         "repeat_penalty": 1.1
                     }
                 },
@@ -68,7 +114,7 @@ def generate_with_ollama(prompt: str, max_tokens: int = 500) -> str:
                     time.sleep(retry_delay * (attempt + 1))
                     continue
                 else:
-                    return f"Error: Ollama returned status 500. Please restart Ollama: taskkill /IM ollama.exe /F && ollama serve"
+                    return f"Error: Ollama returned status 500. Please restart Ollama."
             else:
                 return f"Error: Ollama returned status {response.status_code}"
                 
@@ -86,47 +132,26 @@ def generate_with_ollama(prompt: str, max_tokens: int = 500) -> str:
     return "Error: Failed after multiple retries. Please restart Ollama and try again."
 
 
-def generate_with_transformers(prompt: str, max_tokens: int = 500) -> str:
+def generate_with_groq_chat(messages: list, max_tokens: int = 1000) -> str:
     """
-    Generate response using HuggingFace transformers.
-    
-    Note: This requires significant GPU memory for LLaMA models.
+    Chat-style generation with Groq (supports conversation history)
     """
     try:
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-        import torch
-        from app.config import LLM_MODEL_ID
+        from groq import Groq
         
-        # Use GPU if available
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        client = Groq(api_key=GROQ_API_KEY)
         
-        tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_ID)
-        model = AutoModelForCausalLM.from_pretrained(
-            LLM_MODEL_ID,
-            torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-            device_map="auto"
+        response = client.chat.completions.create(
+            model=GROQ_LLM_MODEL,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=0.3,
         )
         
-        inputs = tokenizer(prompt, return_tensors="pt").to(device)
-        
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=max_tokens,
-            temperature=0.7,
-            do_sample=True,
-            pad_token_id=tokenizer.eos_token_id
-        )
-        
-        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-        
-        # Remove the prompt from the response
-        if response.startswith(prompt):
-            response = response[len(prompt):].strip()
-        
-        return response
+        return response.choices[0].message.content
         
     except Exception as e:
-        return f"Error generating response: {str(e)}"
+        return f"Error with Groq chat: {str(e)}"
 
 
 def generate_with_ollama_chat(messages: list, max_tokens: int = 500) -> str:
