@@ -75,10 +75,7 @@ PADDLEOCR_LANG = "en"
 # =============================================================================
 # DATABASE SETTINGS
 # =============================================================================
-MONGODB_URI = os.getenv(
-    "MONGODB_URI", 
-    "mongodb+srv://jaywani22_db_user:JAYwani$22@cluster0.sn1qqyk.mongodb.net/?appName=Cluster0"
-)
+MONGODB_URI = os.getenv("MONGODB_URI", "")
 MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "multimodal_rag")
 
 # FAISS settings
