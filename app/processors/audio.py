@@ -10,48 +10,73 @@ from app.config import USE_CLOUD_WHISPER, GROQ_API_KEY, GROQ_WHISPER_MODEL
 _whisper_model = None
 
 
-def transcribe_audio(audio_path: str) -> Dict[str, Any]:
+def transcribe_audio(audio_path: str, language: str = None) -> Dict[str, Any]:
     """
     Transcribe audio file to text.
     Uses Groq Whisper API (cloud) or local Whisper based on config.
     
     Args:
         audio_path: Path to audio file (mp3, wav, etc.)
+        language: Optional language code (None for auto-detect)
     
     Returns:
         Dictionary with text, segments, and language
     """
+    from app.config import ENABLE_TRANSCRIPTION_CLEANING
+    from app.utils.transcription_utils import clean_transcription
+    
     if USE_CLOUD_WHISPER:
-        return transcribe_with_groq(audio_path)
+        result = transcribe_with_groq(audio_path, language=language)
     else:
-        return audio_to_text_with_timestamps(audio_path)
+        result = audio_to_text_with_timestamps(audio_path)
+    
+    # Clean the transcription if enabled
+    if ENABLE_TRANSCRIPTION_CLEANING and result.get("text"):
+        result["text"] = clean_transcription(result["text"])
+    
+    return result
 
 
-def transcribe_with_groq(audio_path: str) -> Dict[str, Any]:
+def transcribe_with_groq(audio_path: str, language: str = None) -> Dict[str, Any]:
     """
     Transcribe audio using Groq Whisper API (FREE, fast, accurate).
     
     Uses whisper-large-v3 - much more accurate than local tiny model.
     Free tier included in Groq's 14,400 requests/day.
+    
+    Args:
+        audio_path: Path to audio file
+        language: Optional language code (None for auto-detect)
     """
     try:
         from groq import Groq
+        from app.config import WHISPER_LANGUAGE
         
         client = Groq(api_key=GROQ_API_KEY)
         
+        # Use config language if not specified
+        if language is None:
+            language = WHISPER_LANGUAGE
+        
         # Read audio file
         with open(audio_path, "rb") as audio_file:
-            transcription = client.audio.transcriptions.create(
-                model=GROQ_WHISPER_MODEL,
-                file=audio_file,
-                response_format="verbose_json",  # Get timestamps
-                language="en"  # Can be made dynamic
-            )
+            # Build transcription params
+            params = {
+                "model": GROQ_WHISPER_MODEL,
+                "file": audio_file,
+                "response_format": "verbose_json",  # Get timestamps
+            }
+            
+            # Only set language if specified (None = auto-detect)
+            if language:
+                params["language"] = language
+            
+            transcription = client.audio.transcriptions.create(**params)
         
         # Parse response
         result = {
             "text": transcription.text,
-            "language": getattr(transcription, 'language', 'en'),
+            "language": getattr(transcription, 'language', language or 'unknown'),
             "duration": getattr(transcription, 'duration', 0),
             "segments": []
         }

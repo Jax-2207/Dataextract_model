@@ -13,6 +13,7 @@ from app.storage.learned_answers import (
     save_learned_answer,
     get_learned_stats
 )
+from app.utils.diversity import ensure_file_diversity
 
 router = APIRouter()
 
@@ -73,9 +74,11 @@ async def smart_query(request: QueryRequest):
                 reasoning="This answer was previously learned and saved."
             )
         
-        # Step 2: Search local vector DB
+        # Step 2: Search local vector DB (retrieve more for diversity)
         question_embedding = get_query_embeddings(request.question)
-        distances, indices = search_vectors(question_embedding, k=request.top_k)
+        # Retrieve 2x chunks initially to ensure multi-document coverage
+        search_k = min(request.top_k * 2, 40)
+        distances, indices = search_vectors(question_embedding, k=search_k)
         chunks_data = get_chunks_by_indices(indices[0])
         
         # Step 3: If no local data, offer internet
@@ -90,23 +93,41 @@ async def smart_query(request: QueryRequest):
                 reasoning="No documents found in the database."
             )
         
-        # Step 4: Build context and generate answer with confidence
+        # Step 3.5: Ensure file diversity in results
+        chunks_data = ensure_file_diversity(
+            chunks_data, 
+            max_chunks=request.top_k,
+            max_per_file=max(3, request.top_k // 2)  # Allow at least 3 per file
+        )
+        
+        # Step 3.6: Analyze question type for intelligent answering
+        from app.utils.query_understanding import get_question_context
+        question_context = get_question_context(request.question)
+        
+        # Step 4: Build enriched context with file metadata
         context_parts = []
         sources = []
-        for chunk in chunks_data:
-            context_parts.append(chunk["text"])
+        for i, chunk in enumerate(chunks_data, 1):
+            file_name = chunk.get("file", "unknown")
+            chunk_text = chunk["text"]
+            
+            # Add metadata header for each chunk to help LLM understand sources
+            context_parts.append(f"[Source {i}: {file_name}]\n{chunk_text}")
+            
             sources.append({
-                "file": chunk.get("file", "unknown"),
+                "file": file_name,
                 "chunk_id": chunk.get("chunk_id", -1)
             })
         
-        context = "\n\n".join(context_parts)
+        context = "\n\n---\n\n".join(context_parts)
         
-        # Generate answer with confidence score
+        # Generate answer with confidence score and question understanding
         result = generate_with_confidence(
             prompt="",  # Not used in new function
             context=context,
-            question=request.question
+            question=request.question,
+            question_type=question_context['type'],
+            guidance=question_context['guidance']
         )
         
         confidence = result["confidence_score"]
