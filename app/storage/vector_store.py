@@ -130,13 +130,13 @@ def search_vectors(
 
 def get_chunks_by_indices(indices: np.ndarray) -> List[Dict[str, Any]]:
     """
-    Get chunk metadata by their indices.
+    Get chunk metadata by their indices, filtering out deleted chunks.
     
     Args:
         indices: Array of indices to retrieve
     
     Returns:
-        List of chunk metadata dictionaries
+        List of chunk metadata dictionaries (excluding deleted chunks)
     """
     mapping = get_chunk_mapping()
     chunks = []
@@ -144,7 +144,10 @@ def get_chunks_by_indices(indices: np.ndarray) -> List[Dict[str, Any]]:
     for idx in indices:
         idx = int(idx)
         if idx in mapping:
-            chunks.append(mapping[idx])
+            chunk = mapping[idx]
+            # Skip deleted chunks
+            if not chunk.get('deleted', False):
+                chunks.append(chunk)
     
     return chunks
 

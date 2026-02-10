@@ -185,9 +185,24 @@ def generate_with_ollama_chat(messages: list, max_tokens: int = 500) -> str:
         return f"Error generating response: {str(e)}"
 
 
-def generate_with_confidence(prompt: str, context: str, question: str, max_tokens: int = 1000) -> dict:
+def generate_with_confidence(
+    prompt: str, 
+    context: str, 
+    question: str,
+    question_type: str = 'other',
+    guidance: str = '',
+    max_tokens: int = 1500
+) -> dict:
     """
-    Generate a response with confidence score.
+    Generate a response with confidence score and intelligent understanding.
+    
+    Args:
+        prompt: Legacy parameter (not used)
+        context: Context from uploaded documents
+        question: User's question
+        question_type: Type of question (definition, how_to, etc.)
+        guidance: Guidance for answering this type of question
+        max_tokens: Maximum tokens to generate
     
     Returns:
         dict with 'answer', 'confidence_score', and 'reasoning'
@@ -197,33 +212,70 @@ def generate_with_confidence(prompt: str, context: str, question: str, max_token
         
         client = Groq(api_key=GROQ_API_KEY)
         
-        confidence_prompt = f"""You are a RAG assistant. Answer the question based ONLY on the provided context.
+        # Enhanced prompt with semantic understanding
+        confidence_prompt = f"""You are an intelligent educational assistant analyzing uploaded learning materials.
 
-CONTEXT FROM UPLOADED FILES:
+CONTEXT FROM UPLOADED DOCUMENTS:
 ---
 {context}
 ---
 
-QUESTION: {question}
+STUDENT QUESTION: {question}
 
-INSTRUCTIONS:
-1. Answer the question using ONLY the context above
-2. Rate your confidence (0-100%) based on how well the context answers the question
-3. If the context doesn't contain relevant information, confidence should be LOW (below 30%)
+QUESTION TYPE: {question_type}
+GUIDANCE: {guidance}
+
+YOUR TASK:
+1. **Understand the question deeply**: 
+   - Identify what the student is really asking for
+   - Consider the question type and respond appropriately
+   - Think about what would be most helpful to learn
+
+2. **Answer using ONLY the provided context**:
+   - Synthesize information from multiple parts if needed
+   - Explain concepts in a clear, educational manner
+   - Use examples from the context when available
+   - Reference the source material naturally (e.g., "According to the document...")
+   - If the context has code/formulas, explain them clearly
+
+3. **Be human-like and helpful**:
+   - Use conversational, friendly language
+   - Break down complex topics into digestible parts
+   - Add clarifications where helpful
+   - Structure your answer logically (use lists, steps, comparisons as appropriate)
+   - Act like a patient teacher explaining to a student
+
+4. **Assess confidence**:
+   - HIGH (80-100%): Context directly and completely answers the question
+   - MEDIUM (50-79%): Context has relevant info but may be incomplete
+   - LOW (0-49%): Context doesn't adequately address the question
+
+IMPORTANT RULES:
+- Answer ONLY based on the context provided
+- Do NOT use your general knowledge
+- If the context doesn't contain the answer, say so clearly
+- Be accurate and cite the source material
 
 Respond in this EXACT format:
-ANSWER: [Your answer here]
+ANSWER: [Your comprehensive, human-like answer here]
 CONFIDENCE: [0-100]
-REASONING: [Why you gave this confidence score]"""
+REASONING: [Why you gave this confidence score]
+"""
 
         response = client.chat.completions.create(
             model=GROQ_LLM_MODEL,
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that provides answers with confidence scores."},
-                {"role": "user", "content": confidence_prompt}
+                {
+                    "role": "system", 
+                    "content": "You are a helpful educational assistant that provides clear, accurate answers with confidence scores. You explain concepts like a patient teacher."
+                },
+                {
+                    "role": "user", 
+                    "content": confidence_prompt
+                }
             ],
             max_tokens=max_tokens,
-            temperature=0.2,
+            temperature=0.3,  # Lower for more focused answers
         )
         
         result_text = response.choices[0].message.content

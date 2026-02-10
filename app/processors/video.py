@@ -10,30 +10,51 @@ from typing import List, Dict, Any, Optional
 from app.processors.audio import transcribe_audio
 
 
-def extract_audio_from_video(video_path: str, output_path: Optional[str] = None) -> str:
+def extract_audio_from_video(
+    video_path: str, 
+    output_path: Optional[str] = None,
+    high_quality: bool = True
+) -> str:
     """
     Extract audio track from video using FFmpeg.
     
     Args:
         video_path: Path to video file
         output_path: Optional output path for audio file
+        high_quality: Use high quality settings (44.1kHz stereo with filtering)
     
     Returns:
         Path to extracted audio file
     """
+    from app.config import AUDIO_SAMPLE_RATE, AUDIO_CHANNELS
+    
     if output_path is None:
         # Create temp file for audio
         output_path = tempfile.mktemp(suffix='.wav')
     
-    cmd = [
-        'ffmpeg', '-y',  # Overwrite output
-        '-i', video_path,
-        '-vn',  # No video
-        '-acodec', 'pcm_s16le',  # WAV format
-        '-ar', '16000',  # 16kHz sample rate (good for Whisper)
-        '-ac', '1',  # Mono
-        output_path
-    ]
+    if high_quality:
+        # High quality extraction with noise filtering
+        cmd = [
+            'ffmpeg', '-y',  # Overwrite output
+            '-i', video_path,
+            '-vn',  # No video
+            '-acodec', 'pcm_s16le',  # WAV format
+            '-ar', str(AUDIO_SAMPLE_RATE),  # 44.1kHz for better quality
+            '-ac', str(AUDIO_CHANNELS),  # Stereo
+            '-af', 'highpass=f=200,lowpass=f=3000,volume=1.5',  # Filter noise and boost volume
+            output_path
+        ]
+    else:
+        # Standard quality (16kHz mono - faster, smaller)
+        cmd = [
+            'ffmpeg', '-y',
+            '-i', video_path,
+            '-vn',
+            '-acodec', 'pcm_s16le',
+            '-ar', '16000',
+            '-ac', '1',
+            output_path
+        ]
     
     result = subprocess.run(cmd, capture_output=True, text=True)
     

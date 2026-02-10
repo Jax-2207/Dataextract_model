@@ -64,7 +64,17 @@ OLLAMA_MODEL = "llama3.2:3b"
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 # Local Whisper settings (fallback)
-WHISPER_MODEL = "tiny"
+WHISPER_MODEL = "medium"  # Upgraded from "tiny" for much better accuracy
+# Options: tiny (39M, ~32% WER), base (74M), small (244M), medium (769M, ~15% WER)
+
+# =============================================================================
+# TRANSCRIPTION SETTINGS
+# =============================================================================
+AUDIO_SAMPLE_RATE = 44100  # Hz (44.1kHz = CD quality, improved from 16kHz)
+AUDIO_CHANNELS = 2  # Stereo (better quality than mono)
+WHISPER_LANGUAGE = None  # None = auto-detect, or set to "en", "es", etc.
+ENABLE_TRANSCRIPTION_CLEANING = True
+
 
 # =============================================================================
 # OCR SETTINGS
@@ -83,7 +93,7 @@ FAISS_INDEX_PATH = os.path.join(FAISS_DIR, "index.faiss")
 FAISS_MAPPING_PATH = os.path.join(FAISS_DIR, "mapping.json")
 
 # Search settings
-TOP_K_RESULTS = 10
+TOP_K_RESULTS = 20  # Increased for better multi-document coverage
 
 # =============================================================================
 # STARTUP INFO
