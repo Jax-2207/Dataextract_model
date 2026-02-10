@@ -394,13 +394,6 @@ LEARNING_THRESHOLD = 90   # Above this, save to DB
 4. Push to branch (`git push origin feature/amazing`)
 5. Open a Pull Request
 
----
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
----
 
 <div align="center">
 
